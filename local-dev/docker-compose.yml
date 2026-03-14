@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  opa:
+    image: openpolicyagent/opa:latest
+    container_name: local-opa
+    ports:
+      - "8181:8181"
+    volumes:
+      - ../policies/opa:/policies
+    # Explicitly bind to 0.0.0.0 so it accepts traffic from the Docker network
+    command: ["run", "--server", "--addr", "0.0.0.0:8181", "--log-level", "debug", "/policies"]
+
+  data-mcp:
+    build:
+      context: ../mcp-servers/data-mcp
+      dockerfile: Dockerfile
+    container_name: local-data-mcp
+    ports:
+      - "8080:8080"
+    environment:
+      # Tell the FastMCP server to use HTTP/SSE instead of stdio
+      - MCP_TRANSPORT=sse
+      
+      # Point to the OPA container in this docker network
+      - OPA_URL=http://opa:8181/v1/data/mcp/tools/allow
+      
+      # Database Connection (Assuming your ai-platform postgres is running on your host machine)
+      # 'host.docker.internal' allows this container to reach the DB mapped to your Windows localhost
+      - DB_HOST=host.docker.internal
+      - DB_PORT=5432
+      - DB_USER=admin
+      - DB_PASS=localpassword123
+      - DB_NAME=ai_memory
+      
+      # OTel Export (Pointing to the ai-platform collector running on your host)
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://host.docker.internal:4318/v1/traces
+    depends_on:
+      - opa
